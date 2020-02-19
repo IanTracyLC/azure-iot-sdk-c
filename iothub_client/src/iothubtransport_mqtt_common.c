@@ -2254,6 +2254,15 @@ static int SendMqttConnectMsg(PMQTTTRANSPORT_HANDLE_DATA transport_data)
             }
         }
 
+        const char* dt_model_id = transport_data->transport_callbacks.dt_model_id_cb(transport_data->transport_ctx);
+        if (dt_model_id != NULL)
+        {
+            if (STRING_concat(transport_data->configPassedThroughUsername, dt_model_id) != 0)
+            {
+                LogError("Failed to set DT Model Id");
+            }
+        }
+
         STRING_HANDLE clientId;
 
         clientId = buildClientId(STRING_c_str(transport_data->device_id), STRING_c_str(transport_data->module_id));

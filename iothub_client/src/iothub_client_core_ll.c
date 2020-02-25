@@ -17,7 +17,6 @@
 #include "azure_c_shared_utility/singlylinkedlist.h"
 #include "azure_c_shared_utility/shared_util_options.h"
 #include "azure_c_shared_utility/agenttime.h"
-#include "azure_c_shared_utility/urlencode.h"
 
 #include "iothub_client_core_ll.h"
 #include "iothub_client_options.h"
@@ -142,9 +141,6 @@ static const char PROTOCOL_GATEWAY_HOST_TOKEN[] = "GatewayHostName";
 static const char MODULE_ID_TOKEN[] = "ModuleId";
 static const char PROVISIONING_TOKEN[] = "UseProvisioning";
 static const char PROVISIONING_ACCEPTABLE_VALUE[] = "true";
-static const char DT_MODEL_ID_TOKEN[] = "digital-twin-model-id";
-
-
 
 #ifdef USE_EDGE_MODULES
 /*The following section should be moved to iothub_module_client_ll.c during impending refactor*/
@@ -2348,9 +2344,9 @@ IOTHUB_CLIENT_RESULT IoTHubClientCore_LL_SetOption(IOTHUB_CLIENT_CORE_LL_HANDLE 
                 handleData->dt_model_id = NULL;
             }
 
-            if ((handleData->dt_model_id = STRING_construct_sprintf("&%s=%s", DT_MODEL_ID_TOKEN, STRING_c_str(URL_EncodeString((const char*)value)))) == NULL)
+            if ((handleData->dt_model_id = STRING_construct((const char*)value)) == NULL)
             {
-                LogError("STRING_construct_sprintf failed");
+                LogError("STRING_c_str failed");
                 result = IOTHUB_CLIENT_ERROR;
             }
             else

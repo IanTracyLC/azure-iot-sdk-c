@@ -76,7 +76,7 @@ MOCKABLE_FUNCTION(, DIGITALTWIN_CLIENT_RESULT, DigitalTwin_DeviceClient_CreateFr
  
   @returns  A DIGITALTWIN_CLIENT_RESULT.
 */
-MOCKABLE_FUNCTION(, DIGITALTWIN_CLIENT_RESULT, DigitalTwin_DeviceClient_RegisterInterfacesAsync, DIGITALTWIN_DEVICE_CLIENT_HANDLE, dtDeviceClientHandle, const char*, deviceCapabilityModel, DIGITALTWIN_INTERFACE_CLIENT_HANDLE*, dtInterfaces, unsigned int, numDTInterfaces, DIGITALTWIN_INTERFACE_REGISTERED_CALLBACK, dtInterfaceRegisteredCallback, void*, userContextCallback);
+MOCKABLE_FUNCTION(, DIGITALTWIN_CLIENT_RESULT, DigitalTwin_DeviceClient_RegisterInterfacesAsync, DIGITALTWIN_DEVICE_CLIENT_HANDLE, dtDeviceClientHandle, DIGITALTWIN_INTERFACE_CLIENT_HANDLE*, dtInterfaces, unsigned int, numDTInterfaces, DIGITALTWIN_INTERFACE_REGISTERED_CALLBACK, dtInterfaceRegisteredCallback, void*, userContextCallback);
 
 /**
   @brief    Destroys resources associated with a <c>DIGITALTWIN_DEVICE_CLIENT_HANDLE</c>.

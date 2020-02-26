@@ -171,7 +171,7 @@ static DIGITALTWIN_CLIENT_RESULT DigitalTwinSampleDevice_LL_RegisterDigitalTwinI
     DIGITALTWIN_CLIENT_RESULT result;
 
     // Give DigitalTwin interfaces to register.  DigitalTwin_DeviceClient_RegisterInterfacesAsync returns immediately
-    if ((result = DigitalTwin_DeviceClient_LL_RegisterInterfacesAsync(digitaltwinDeviceClientLLHandle, DIGITALTWIN_SAMPLE_DEVICE_CAPABILITY_MODEL_ID, interfaceClientHandles, numInterfaceClientHandles, DigitalTwinSampleDevice_LL_InterfacesRegisteredCallback, &appDigitalTwinRegistrationStatus)) != DIGITALTWIN_CLIENT_OK)
+    if ((result = DigitalTwin_DeviceClient_LL_RegisterInterfacesAsync(digitaltwinDeviceClientLLHandle, interfaceClientHandles, numInterfaceClientHandles, DigitalTwinSampleDevice_LL_InterfacesRegisteredCallback, &appDigitalTwinRegistrationStatus)) != DIGITALTWIN_CLIENT_OK)
     {
         LogError("DigitalTwin_DeviceClient_LL_RegisterInterfacesAsync failed, error=<%s>", MU_ENUM_TO_STRING(DIGITALTWIN_CLIENT_RESULT, result));
     }

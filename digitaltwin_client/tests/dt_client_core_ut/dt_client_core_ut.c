@@ -629,11 +629,13 @@ static void set_expected_calls_for_DT_ClientCore_RegisterInterfacesAsync(int num
     STRICT_EXPECTED_CALL(testBindingLock(IGNORED_PTR_ARG));
     STRICT_EXPECTED_CALL(DT_InterfaceList_BindInterfaces(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG, IGNORED_NUM_ARG, IGNORED_NUM_ARG));
     STRICT_EXPECTED_CALL(testBindingUnlock(IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(testBindingDTDeviceSetMethodCallback(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG));
+    STRICT_EXPECTED_CALL(testBindingDTDeviceSetTwinCallback(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG));
+    STRICT_EXPECTED_CALL(DT_InterfaceList_RegistrationCompleteCallback(IGNORED_PTR_ARG, DIGITALTWIN_CLIENT_OK));
+    STRICT_EXPECTED_CALL(testInterfaceRegisteredCallback(DIGITALTWIN_CLIENT_OK, testDTRegisterInterfacesAsyncContext));
 }
 
-// test_register_interfaces_init tests the first stage of interface registration, and in particular does NOT 
-// invoke any of the callbacks into test framework we've provided (leaving for subsequent test helpers to process)
-static DT_CLIENT_CORE_HANDLE test_register_interfaces_init(DT_CLIENT_CORE_HANDLE h, int numInterfaces, const char** componentNames)
+static DT_CLIENT_CORE_HANDLE test_register_interfaces_success(DT_CLIENT_CORE_HANDLE h, int numInterfaces, const char** componentNames)
 {
     // Perform the initial registration of async interfaces
     set_expected_calls_for_DT_ClientCore_RegisterInterfacesAsync(numInterfaces, componentNames);
@@ -644,11 +646,11 @@ static DT_CLIENT_CORE_HANDLE test_register_interfaces_init(DT_CLIENT_CORE_HANDLE
     //assert
     ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
     ASSERT_ARE_EQUAL(DIGITALTWIN_CLIENT_RESULT, DIGITALTWIN_CLIENT_OK, result);
-    // registering an interface results in the product code sending a telemetry message, which for the UT case is mocked
-    // to the function impl_testBindingDTClientSendEventAsync which will record the callbacks for later.
-    ASSERT_IS_NOT_NULL(dtTestTelemetryConfirmationCallback);
-    ASSERT_IS_NOT_NULL(dtTestTelemetryConfirmationCallbackContext);
-
+    ASSERT_IS_NOT_NULL(dtTestDeviceMethodCallback, "Test device method callback not set");
+    ASSERT_IS_NOT_NULL(dtTestDeviceMethodCallbackContext, "Test device method callback context not set");
+    ASSERT_IS_NOT_NULL(dtTestDeviceTwinCallback, "Test twin callback not set");
+    ASSERT_IS_NOT_NULL(dtTestDeviceTwinContext, "Test twin callback context not set");
+    
     umock_c_reset_all_calls();
     return h;
 }
@@ -665,41 +667,6 @@ static void test_DTClientCore_DestroyHandleIfRegistrationPending(DT_CLIENT_CORE_
     DT_ClientCoreDestroy(h);
 }
 
-// The _close_before_twin_callback_ tests simulate registering an interface, but then closing the handle before
-// any callbacks that the registration process initiated have completed
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_zero_interfaces_close_before_twin_callback_ok)
-{
-    //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 0, dtTestComponentNamesArray);
-    //cleanup
-    test_DTClientCore_DestroyHandleIfRegistrationPending(h);
-}
-
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_one_interface_close_before_twin_callback_ok)
-{
-    //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 1, dtTestComponentNamesArray);
-    //cleanup
-    test_DTClientCore_DestroyHandleIfRegistrationPending(h);
-}
-
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_two_interfaces_close_before_twin_callback_ok)
-{
-    //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
-    //cleanup
-    test_DTClientCore_DestroyHandleIfRegistrationPending(h);
-}
-
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_three_interfaces_close_before_twin_callback_ok)
-{
-    //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 3, dtTestComponentNamesArray);
-
-    //cleanup
-    test_DTClientCore_DestroyHandleIfRegistrationPending(h);
-}
-
 TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_NULL_handle)
 {
     //act
@@ -710,24 +677,6 @@ TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_NULL_handle)
     ASSERT_ARE_EQUAL(DIGITALTWIN_CLIENT_RESULT, DIGITALTWIN_CLIENT_ERROR_INVALID_ARG, result);
 
     umock_c_reset_all_calls();
-}
-
-
-// Tests scenario where the client core receives a registration complete message, but the user context pointer is NULL.
-// This should never happen - would point to a serious bug in underlying IoTHub device sdk.  But checking guard just in case.
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_NULL_context_ptr_in_callback)
-{
-    //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 3, dtTestComponentNamesArray);
-
-    //act
-    dtTestTelemetryConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_OK, NULL);
-
-    //assert
-    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
-
-    //cleanup
-    test_DTClientCore_DestroyHandleIfRegistrationPending(h);
 }
 
 static void set_expected_calls_for_BeginClientCoreCallbackProcessing()
@@ -762,51 +711,10 @@ static void set_expected_calls_for_DT_ClientCore_process_twin()
     set_expected_calls_for_EndClientCoreCallbackProcessing();
 }
 
-// Sets expected behavior for reported properties.
-static void set_expected_calls_for_properties_reported_callback()
-{
-    set_expected_calls_for_BeginClientCoreCallbackProcessing();
-
-    STRICT_EXPECTED_CALL(testBindingDTDeviceSetMethodCallback(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_PTR_ARG));
-    STRICT_EXPECTED_CALL(testBindingDTDeviceSetTwinCallback(IGNORED_PTR_ARG, IGNORED_PTR_ARG, IGNORED_NUM_ARG));
-    STRICT_EXPECTED_CALL(DT_InterfaceList_RegistrationCompleteCallback(IGNORED_PTR_ARG, DIGITALTWIN_CLIENT_OK));
-    STRICT_EXPECTED_CALL(testInterfaceRegisteredCallback(DIGITALTWIN_CLIENT_OK, testDTRegisterInterfacesAsyncContext));
-
-    set_expected_calls_for_EndClientCoreCallbackProcessing();
-    STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
-}
-
-// Tests full registration process; initial register and a simulation of service ack'ng the registration message
-static DT_CLIENT_CORE_HANDLE test_register_interfaces_complete(DT_CLIENT_CORE_HANDLE h, int numInterfaces)
-{
-    //arrange 
-    test_register_interfaces_init(h, numInterfaces, dtTestComponentNamesArray);
-    set_expected_calls_for_properties_reported_callback();
-
-    //act
-    // The mocked called of this UT, impl_testBindingDTClientSendEventAsync, stores out the callback that the product
-    // code provides for the service to signal that the telemetry message has been accepted.  Since there is no service
-    // in a UT, we perform the acknowledegment call here.
-    dtTestTelemetryConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_OK, dtTestTelemetryConfirmationCallbackContext);
-
-    //assert
-    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
-    // After the DigitalTwin Client Core product code is signaled IOTHUB_CLIENT_CONFIRMATION_OK, it should start listening for
-    // device methods and twin callbacks.  Verify that this is the case.
-    ASSERT_IS_NOT_NULL(dtTestDeviceMethodCallback, "Test device method callback not set");
-    ASSERT_IS_NOT_NULL(dtTestDeviceMethodCallbackContext, "Test device method callback context not set");
-    ASSERT_IS_NOT_NULL(dtTestDeviceTwinCallback, "Test twin callback not set");
-    ASSERT_IS_NOT_NULL(dtTestDeviceTwinContext, "Test twin callback context not set");
-
-    //cleanup
-    umock_c_reset_all_calls();
-    return h;
-}
-
 TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_zero_interfaces_with_callback_complete_ok)
 {
     //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 0);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 0, dtTestComponentNamesArray);
     //cleanup
     DT_ClientCoreDestroy(h);
 }
@@ -814,7 +722,7 @@ TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_zero_interfaces_with_callback
 TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_one_interface_with_callback_complete_ok)
 {
     //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 1);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 1, dtTestComponentNamesArray);
     //cleanup
     DT_ClientCoreDestroy(h);
 }
@@ -822,7 +730,7 @@ TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_one_interface_with_callback_c
 TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_two_interfaces_with_callback_complete_ok)
 {
     //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     //cleanup
     DT_ClientCoreDestroy(h);
 }
@@ -830,7 +738,7 @@ TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_two_interfaces_with_callback_
 TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_three_interfaces_with_callback_complete_ok)
 {
     //act
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 3);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 3, dtTestComponentNamesArray);
     //cleanup
     DT_ClientCoreDestroy(h);
 }
@@ -841,9 +749,8 @@ TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_three_interfaces_with_callbac
 TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_multiple_calls_fail)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 3);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 3, dtTestComponentNamesArray);
 
-    STRICT_EXPECTED_CALL(DT_InterfaceClient_CheckNameValid(IGNORED_PTR_ARG, IGNORED_NUM_ARG));
     set_expected_calls_for_VerifyComponentsUnique(1, dtTestComponentNamesArray);
 
     //act
@@ -895,7 +802,7 @@ static void set_expected_calls_for_DT_DeviceMethod_callback(DT_COMMAND_PROCESSOR
 static void testDT_command(DT_COMMAND_PROCESSOR_RESULT commandProcessorResult, int httpStatusResultToReturn, int httpStatusResultExpected, const char* methodDataToReturn, const char* expectedMethodCallbackData)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 3);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 3, dtTestComponentNamesArray);
     set_expected_calls_for_DT_DeviceMethod_callback(commandProcessorResult, httpStatusResultToReturn, methodDataToReturn);
 
     //act
@@ -929,54 +836,6 @@ TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_device_method_not_processed_f
     testDT_command(DT_COMMAND_PROCESSOR_NOT_APPLICABLE, 500, 501, NULL, dtTestMethodNotPresentResponse);
 }
 
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_already_registering_close_before_register_done_fails)
-{
-    //arrange
-    // Starts registration process, but we're not done yet.  Twin hasn't arrived.
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
-
-    STRICT_EXPECTED_CALL(DT_InterfaceClient_CheckNameValid(IGNORED_PTR_ARG, IGNORED_NUM_ARG));
-    set_expected_calls_for_VerifyComponentsUnique(1, dtTestComponentNamesArray);
-
-    //act
-    DIGITALTWIN_CLIENT_RESULT result = DT_ClientCoreRegisterInterfacesAsync(h, dtTestInterfaceArray, 1, testInterfaceRegisteredCallback, testDTRegisterInterfacesAsyncContext);
-
-    //assert
-    ASSERT_ARE_EQUAL(DIGITALTWIN_CLIENT_RESULT, DIGITALTWIN_CLIENT_ERROR_REGISTRATION_PENDING, result);
-
-    //cleanup
-    test_DTClientCore_DestroyHandleIfRegistrationPending(h);
-}
-
-TEST_FUNCTION(DT_ClientCoreRegisterInterfacesAsync_already_registering_close_after_register_done_fails)
-{
-    //arrange
-    // Analogous to DT_ClientCoreRegisterInterfacesAsync_already_registering_pre_twin_callback_fails, but we're a bit further along
-    // in registration process (but not yet complete)
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_init(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
-
-	set_expected_calls_for_VerifyComponentsUnique(1, dtTestComponentNamesArray);
-
-    //act
-    DIGITALTWIN_CLIENT_RESULT result = DT_ClientCoreRegisterInterfacesAsync(h, dtTestInterfaceArray, 1, testInterfaceRegisteredCallback, testDTRegisterInterfacesAsyncContext);
-
-    //assert
-    ASSERT_ARE_EQUAL(DIGITALTWIN_CLIENT_RESULT, DIGITALTWIN_CLIENT_ERROR_REGISTRATION_PENDING, result);
-
-    // Now make sure that when the interface registration completes (from first call), everything is OK despite the failed second attempt
-    umock_c_reset_all_calls();
-    set_expected_calls_for_properties_reported_callback();
-    dtTestTelemetryConfirmationCallback(IOTHUB_CLIENT_CONFIRMATION_OK, dtTestTelemetryConfirmationCallbackContext);
-    ASSERT_ARE_EQUAL(char_ptr, umock_c_get_expected_calls(), umock_c_get_actual_calls());
-    ASSERT_IS_NOT_NULL(dtTestDeviceMethodCallback, "Test device method callback not set");
-    ASSERT_IS_NOT_NULL(dtTestDeviceMethodCallbackContext, "Test device method callback context not set");
-    ASSERT_IS_NOT_NULL(dtTestDeviceTwinCallback, "Test twin callback not set");
-    ASSERT_IS_NOT_NULL(dtTestDeviceTwinContext, "Test twin callback context not set");   
-
-    //cleanup
-    DT_ClientCoreDestroy(h);
-}
-
 /*
 static const char* dtTestInterfaceNamesDup1[] = { "DuplicateName", "DuplicateName" };
 static const char* dtTestInterfaceNamesDup2[] = { "DuplicateName", "Unique1", DuplicateName" };
@@ -990,7 +849,6 @@ static void test_duplicate_interfaces(int numInterfaces, const char** componentN
 {
     //arrange
     DT_CLIENT_CORE_HANDLE h = allocateDT_client_core_for_test();
-    STRICT_EXPECTED_CALL(DT_InterfaceClient_CheckNameValid(IGNORED_PTR_ARG, IGNORED_NUM_ARG));
 	set_expected_calls_for_VerifyComponentsUnique(numInterfaces, componentNames);
 
     //act
@@ -1075,7 +933,7 @@ static void test_call_sendtelemetryasync_callback(IOTHUB_CLIENT_CONFIRMATION_RES
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_close_before_callback_complete_OK)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     set_expected_calls_for_DT_ClientCore_SendTelemetryAsync();
 
     //act
@@ -1099,7 +957,7 @@ TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_close_before_callback_complete_OK)
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_close_before_callback_complete_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     set_expected_calls_for_DT_ClientCore_SendTelemetryAsync();
 
     //act
@@ -1123,7 +981,7 @@ TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_close_before_callback_complete_fai
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_timeout_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     set_expected_calls_for_DT_ClientCore_SendTelemetryAsync();
 
     //act
@@ -1146,7 +1004,7 @@ TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_timeout_fails)
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_error_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     set_expected_calls_for_DT_ClientCore_SendTelemetryAsync();
 
     //act
@@ -1179,7 +1037,7 @@ TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_clientCore_NULL_handle_fails)
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_interface_NULL_handle_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
 
     //act
@@ -1196,7 +1054,7 @@ TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_interface_NULL_handle_fails)
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_telemetry_NULL_handle_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     STRICT_EXPECTED_CALL(gballoc_free(IGNORED_PTR_ARG));
 
     //act
@@ -1213,7 +1071,7 @@ TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_telemetry_NULL_handle_fails)
 TEST_FUNCTION(DT_ClientCoreSendTelemetryAsync_fail)
 {
     // arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
 
     int negativeTestsInitResult = umock_c_negative_tests_init();
     ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);
@@ -1283,7 +1141,7 @@ static void test_call_sendreportedproperties_callback(int status_code, DIGITALTW
 TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_ok)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     set_expected_calls_for_DT_ClientCore_ReportPropertyStatusAsync();
 
     //act
@@ -1302,7 +1160,7 @@ TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_ok)
 TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_error_status_code_fail)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
     set_expected_calls_for_DT_ClientCore_ReportPropertyStatusAsync();
 
     //act
@@ -1330,7 +1188,7 @@ TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_clientCore_NULL_fails)
 TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_interfaceHandle_NULL_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
 
     //act
     DIGITALTWIN_CLIENT_RESULT result = DT_ClientCoreReportPropertyStatusAsync(h, NULL, (const unsigned char*)dtTestReportedPropertyData, dtTestReportedPropertyDataLen, dtTestSendReportedPropertyCallbackContext);
@@ -1345,7 +1203,7 @@ TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_interfaceHandle_NULL_fails)
 TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_dataToSend_NULL_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
 
     //act
     DIGITALTWIN_CLIENT_RESULT result = DT_ClientCoreReportPropertyStatusAsync(h, DT_TEST_INTERFACE_HANDLE1, NULL, dtTestReportedPropertyDataLen, dtTestSendReportedPropertyCallbackContext);
@@ -1360,7 +1218,7 @@ TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_dataToSend_NULL_fails)
 TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_dataToSendLen_0_fails)
 {
     //arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
 
     //act
     DIGITALTWIN_CLIENT_RESULT result = DT_ClientCoreReportPropertyStatusAsync(h, DT_TEST_INTERFACE_HANDLE1, (const unsigned char*)dtTestReportedPropertyData, 0, dtTestSendReportedPropertyCallbackContext);
@@ -1375,7 +1233,7 @@ TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_dataToSendLen_0_fails)
 TEST_FUNCTION(DT_ClientCoreReportPropertyStatusAsync_fail)
 {
     // arrange
-    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_complete(allocateDT_client_core_for_test(), 2);
+    DT_CLIENT_CORE_HANDLE h = test_register_interfaces_success(allocateDT_client_core_for_test(), 2, dtTestComponentNamesArray);
 
     int negativeTestsInitResult = umock_c_negative_tests_init();
     ASSERT_ARE_EQUAL(int, 0, negativeTestsInitResult);

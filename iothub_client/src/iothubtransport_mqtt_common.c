@@ -2176,8 +2176,10 @@ static STRING_HANDLE buildClientId(const char* device_id, const char* module_id)
     }
 }
 
-static void append_optional_connect_parameters(PMQTTTRANSPORT_HANDLE_DATA transport_data)
+static int append_optional_connect_parameters(PMQTTTRANSPORT_HANDLE_DATA transport_data)
 {
+    int result = 0;
+
     if (!transport_data->isOptionalConnectParameterSet)
     {
         // This requires the iothubClientHandle, which sadly the MQTT transport only gets on DoWork, so this code still needs to remain here.
@@ -2185,8 +2187,9 @@ static void append_optional_connect_parameters(PMQTTTRANSPORT_HANDLE_DATA transp
         // Also, when device multiplexing is used, the customer creates the transport directly and explicitly, when the client is still not created.
         // This will be a major hurdle when we add device multiplexing to MQTT transport.
 
-        STRING_HANDLE clone;
-        STRING_HANDLE param;
+        STRING_HANDLE clone = NULL;
+        STRING_HANDLE param = NULL;
+        STRING_HANDLE urlEncodedModelId = NULL;
         const char* dt_model_id;
         const char* product_info = transport_data->transport_callbacks.prod_info_cb(transport_data->transport_ctx);
 
@@ -2202,21 +2205,31 @@ static void append_optional_connect_parameters(PMQTTTRANSPORT_HANDLE_DATA transp
         {
             LogInfo("Not setting device capability model id");
         }
-        else if ((param = STRING_construct_sprintf("&%s=%s", DT_MODEL_ID_TOKEN, STRING_c_str(URL_EncodeString(dt_model_id)))) == NULL)
+        else if ((urlEncodedModelId = URL_EncodeString(dt_model_id)) == NULL)
+        {
+            LogError("Failed to URL encode the device capability model id string");
+            result = MU_FAILURE;
+        }
+        else if ((param = STRING_construct_sprintf("&%s=%s", DT_MODEL_ID_TOKEN, STRING_c_str(urlEncodedModelId))) == NULL)
         {
             LogError("Cannot build device capability model id string");
+            result = MU_FAILURE;
         }
         else if (STRING_concat_with_STRING(transport_data->configPassedThroughUsername, param) != 0)
         {
             LogError("Failed to set device capability model id parameter in connect");
+            result = MU_FAILURE;
         }
-        else
-        {
-            transport_data->isOptionalConnectParameterSet = true;
-            STRING_delete(clone);
-            STRING_delete(param);
-        }
+
+        // setting optional connect parameter is only allowed once in the lifetime of the device client.
+        transport_data->isOptionalConnectParameterSet = true;
+
+        STRING_delete(clone);
+        STRING_delete(param);
+        STRING_delete(urlEncodedModelId);
     }
+
+    return result;
 }
 
 static int SendMqttConnectMsg(PMQTTTRANSPORT_HANDLE_DATA transport_data)

@@ -71,12 +71,11 @@ MOCKABLE_FUNCTION(, DIGITALTWIN_CLIENT_RESULT, DigitalTwin_DeviceClient_CreateFr
   @param    dtDeviceClientHandle[in]            A <c>DIGITALTWIN_DEVICE_CLIENT_HANDLE</c> created by <c>DigitalTwin_DeviceClient_CreateFromDeviceHandle</c>.
   @param    dtInterfaces[in]                    An array of length numDTInterfaces of <c>DIGITALTWIN_INTERFACE_CLIENT_HANDLE</c>'s to register with the service.
   @param    numDTInterfaces[in]                 The number of items in the dtInterfaces array.
-  @param    dtInterfaceRegisteredCallback[in]   User specified callback that will be invoked on registration completion or failure.  Callers should not begin sending Digital Twin telemetry until this callback is invoked.
   @param    userContextCallback[in]             User context that is provided to the callback.
  
   @returns  A DIGITALTWIN_CLIENT_RESULT.
 */
-MOCKABLE_FUNCTION(, DIGITALTWIN_CLIENT_RESULT, DigitalTwin_DeviceClient_RegisterInterfacesAsync, DIGITALTWIN_DEVICE_CLIENT_HANDLE, dtDeviceClientHandle, DIGITALTWIN_INTERFACE_CLIENT_HANDLE*, dtInterfaces, unsigned int, numDTInterfaces, DIGITALTWIN_INTERFACE_REGISTERED_CALLBACK, dtInterfaceRegisteredCallback, void*, userContextCallback);
+MOCKABLE_FUNCTION(, DIGITALTWIN_CLIENT_RESULT, DigitalTwin_DeviceClient_RegisterInterfacesAsync, DIGITALTWIN_DEVICE_CLIENT_HANDLE, dtDeviceClientHandle, DIGITALTWIN_INTERFACE_CLIENT_HANDLE*, dtInterfaces, unsigned int, numDTInterfaces);
 
 /**
   @brief    Destroys resources associated with a <c>DIGITALTWIN_DEVICE_CLIENT_HANDLE</c>.

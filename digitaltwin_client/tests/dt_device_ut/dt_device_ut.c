@@ -232,7 +232,7 @@ static void dtTestDeviceRegisterInterfaceCallback(DIGITALTWIN_CLIENT_RESULT dtIn
 
 static void set_expected_calls_for_DT_DeviceClient_RegisterInterfacesAsync()
 {
-    STRICT_EXPECTED_CALL(DT_ClientCoreRegisterInterfacesAsync(IGNORED_PTR_ARG, testDTInterfacesToRegister, testDTInterfacesToRegisterLen, dtTestDeviceRegisterInterfaceCallback, dtTestDeviceRegisterInterfaceCallbackContext));
+    STRICT_EXPECTED_CALL(DT_ClientCoreRegisterInterfacesAsync(IGNORED_PTR_ARG, testDTInterfacesToRegister, testDTInterfacesToRegisterLen));
 }
 
 TEST_FUNCTION(DigitalTwin_DeviceClient_RegisterInterfacesAsync_ok)
@@ -243,7 +243,7 @@ TEST_FUNCTION(DigitalTwin_DeviceClient_RegisterInterfacesAsync_ok)
 
     //act
     set_expected_calls_for_DT_DeviceClient_RegisterInterfacesAsync();
-    result = DigitalTwin_DeviceClient_RegisterInterfacesAsync(h, testDTInterfacesToRegister, testDTInterfacesToRegisterLen, dtTestDeviceRegisterInterfaceCallback, dtTestDeviceRegisterInterfaceCallbackContext);
+    result = DigitalTwin_DeviceClient_RegisterInterfacesAsync(h, testDTInterfacesToRegister, testDTInterfacesToRegisterLen);
 
     //assert
     ASSERT_ARE_EQUAL(DIGITALTWIN_CLIENT_RESULT, result, DIGITALTWIN_CLIENT_OK);
@@ -272,7 +272,7 @@ TEST_FUNCTION(DigitalTwin_DeviceClient_RegisterInterfacesAsync_fail)
         umock_c_negative_tests_fail_call(i);
 
         //act
-        result = DigitalTwin_DeviceClient_RegisterInterfacesAsync(h, testDTInterfacesToRegister, testDTInterfacesToRegisterLen, dtTestDeviceRegisterInterfaceCallback, dtTestDeviceRegisterInterfaceCallbackContext);
+        result = DigitalTwin_DeviceClient_RegisterInterfacesAsync(h, testDTInterfacesToRegister, testDTInterfacesToRegisterLen);
         
         //assert
         ASSERT_ARE_NOT_EQUAL(DIGITALTWIN_CLIENT_RESULT, result, DIGITALTWIN_CLIENT_OK, "DigitalTwin_DeviceClient_RegisterInterfacesAsync failure in test %lu", (unsigned long)i);
